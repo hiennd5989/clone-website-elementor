@@ -141,6 +141,8 @@ Fix, re-import, re-render, and re-run it until only differences you can explain 
 
 - **An added text or control is a bug, not a note.** Remove it, unless it is a disclosed stand-in (a "not sent" message). "Result texts not in the source" and "controls not in the source" should list only the stand-ins.
 - **Explained differences are structural, never visual**: a section split differently, a link wrapping a card instead of its title. Write the reason next to each in the brief.
+- **Compare the open states too.** The extract measures the page as it is when the script runs. Open the mobile drawer (and a sub-panel), a dropdown, a popup, then extract and compare again on both sides: a drawer that wraps into two columns looks fine with the drawer closed.
+- **Finish on the real front end, at phone size.** The CLI render skips the site's page cache, object cache and Elementor's front-end JS. Before reporting done, open the page as a visitor would (a password-protected publish, or a logged-in preview) on a phone-sized viewport and exercise the drawer, dropdowns, popups and floating buttons there.
 - **Elementor zeroes transitions under reduced motion.** Its `frontend.min.css` has `@media (prefers-reduced-motion: reduce) { html * { transition-duration: 0s !important } }`. On a PC with Windows animation effects off, every hover of the clone snaps while the source still animates. Compare with reduced motion on: a control whose transition time dropped to 0 shows it. See the build reference for the fix.
 
 - **Measure the source and the result in the same browser tab with the same emulation**, one after the other. Tabs that ever emulated a phone use overlay scrollbars, others don't, and a 15px scrollbar shifts every width.
