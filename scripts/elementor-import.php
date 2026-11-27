@@ -147,6 +147,13 @@ function clone_sync_menu( $key, array $menu ) {
 	if ( $menu_id && get_term_meta( $menu_id, '_clone_source', true ) !== $key ) {
 		WP_CLI::error( "A menu named '{$name}' already exists and was not created by the clone. Rename the clone menu." );
 	}
+	// Rebuild only when the items changed: every menu item save can trigger a full page-cache purge
+	// (LiteSpeed, WP Rocket), which hurts a live site.
+	$hash = md5( wp_json_encode( $menu['items'] ?? array() ) );
+	if ( $menu_id && get_term_meta( $menu_id, '_clone_hash', true ) === $hash ) {
+		WP_CLI::log( "Menu '{$name}' ({$menu_id}) unchanged." );
+		return $menu_id;
+	}
 	if ( ! $menu_id ) {
 		$menu_id = wp_create_nav_menu( $name );
 		if ( is_wp_error( $menu_id ) ) {
@@ -175,6 +182,7 @@ function clone_sync_menu( $key, array $menu ) {
 		}
 	};
 	$add( $menu['items'] ?? array(), 0 );
+	update_term_meta( $menu_id, '_clone_hash', $hash );
 	WP_CLI::log( "Menu '{$name}' ({$menu_id}) synced." );
 	return $menu_id;
 }
@@ -190,6 +198,8 @@ function clone_upsert_list( array $current, array $incoming ) {
 	return array_values( $by_id );
 }
 
+$clone_global_change = false;
+$clone_saved_pages   = array();
 foreach ( $args as $clone_file ) {
 	$clone_file = str_replace( '\\', '/', $clone_file );
 	$clone_data = json_decode( (string) file_get_contents( $clone_file ), true );
@@ -208,6 +218,7 @@ foreach ( $args as $clone_file ) {
 			WP_CLI::error( "Refusing to set non-Elementor option {$option}." );
 		}
 		update_option( $option, $value );
+		$clone_global_change = true;
 		WP_CLI::log( "Option {$option} updated." );
 	}
 
@@ -223,6 +234,7 @@ foreach ( $args as $clone_file ) {
 		if ( ! $kit->save( array( 'settings' => $settings ) ) ) {
 			WP_CLI::error( 'Saving the kit failed.' );
 		}
+		$clone_global_change = true;
 		WP_CLI::log( 'Kit ' . $kit->get_id() . ' updated.' );
 	}
 
@@ -266,9 +278,19 @@ foreach ( $args as $clone_file ) {
 		if ( ! $saved ) {
 			WP_CLI::error( "Elementor refused to save page {$post_id}." );
 		}
-		WP_CLI::success( sprintf( '%s → %s (edit: %s)', $clone_file, get_permalink( $post_id ), $document->get_edit_url() ) );
+		$clone_saved_pages[] = $post_id;
+		WP_CLI::success( sprintf( '%s → page %d, %s (edit: %s)', $clone_file, $post_id, get_permalink( $post_id ), $document->get_edit_url() ) );
 	}
 }
 
-$clone_plugin->files_manager->clear_cache();
-WP_CLI::success( 'Elementor CSS cache cleared.' );
+// Kit or option changes restyle every page, so all generated CSS must go. Otherwise regenerate only the
+// imported pages' CSS: clearing the whole cache also makes caching plugins purge the entire site.
+if ( $clone_global_change ) {
+	$clone_plugin->files_manager->clear_cache();
+	WP_CLI::success( 'Kit/options changed: all Elementor CSS cleared.' );
+} else {
+	foreach ( $clone_saved_pages as $clone_page_id ) {
+		\Elementor\Core\Files\CSS\Post::create( $clone_page_id )->delete();
+	}
+	WP_CLI::success( 'CSS of the imported pages will regenerate on their next view.' );
+}

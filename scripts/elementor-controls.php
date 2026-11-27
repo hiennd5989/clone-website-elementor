@@ -23,6 +23,11 @@ $clone_plugin = \Elementor\Plugin::$instance;
 if ( class_exists( '\Elementor\Core\Frontend\Performance' ) ) {
 	\Elementor\Core\Frontend\Performance::set_use_style_controls( true );
 }
+// Outside the editor, responsive controls are one key (no …_tablet/…_mobile variants) unless
+// duplication is on, as it is in the editor and during CSS generation.
+if ( method_exists( $clone_plugin->breakpoints, 'set_responsive_control_duplication_mode' ) ) {
+	$clone_plugin->breakpoints->set_responsive_control_duplication_mode( 'on' );
+}
 
 $clone_out_file = null;
 $clone_names    = array();
@@ -116,6 +121,8 @@ foreach ( $clone_names as $clone_name ) {
 				'options'    => isset( $control['options'] ) && is_array( $control['options'] ) ? array_keys( $control['options'] ) : null,
 				'size_units' => $control['size_units'] ?? null,
 				'selectors'  => isset( $control['selectors'] ) ? $control['selectors'] : null,
+				// Per-unit CSS, e.g. a grid's "custom" unit takes a whole track list ("1fr 2fr", "repeat(5, 1fr)").
+				'unit_selectors' => $control['unit_selectors_dictionary'] ?? null,
 			),
 			fn( $v ) => null !== $v && '' !== $v && array() !== $v
 		);

@@ -19,9 +19,21 @@ if ( ! $clone_id || ! get_post( $clone_id ) ) {
 }
 
 add_filter( 'show_admin_bar', '__return_false' );
+
+// Opened from disk (file://), protocol-relative URLs (//host/…) would point at file://host and the site's
+// http:// URLs may be blocked or redirected: make every URL of this site absolute https.
+$clone_host = wp_parse_url( home_url(), PHP_URL_HOST );
+ob_start(
+	function ( $html ) use ( $clone_host ) {
+		$quoted = preg_quote( $clone_host, '#' );
+		$html   = preg_replace( '#(["\'(\s])//' . $quoted . '#', '$1https://' . $clone_host, $html );
+		return preg_replace( '#http://' . $quoted . '#', 'https://' . $clone_host, $html );
+	}
+);
 $GLOBALS['wp']->main( array( 'page_id' => $clone_id, 'preview' => 'true' ) );
 $GLOBALS['wp_the_query'] = $GLOBALS['wp_query'];
 
 $clone_template = get_page_template();
 $clone_template = apply_filters( 'template_include', $clone_template ? $clone_template : get_index_template() );
 include $clone_template;
+ob_end_flush();

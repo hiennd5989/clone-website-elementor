@@ -21,11 +21,12 @@ Pass `--user=<administrator login>` to WP-CLI commands that save Elementor docum
 The scripts and assets must sit on the server, because `wp eval-file` reads local paths there:
 
 ```bash
-KEY=~/.ssh/<key-the-user-named>; HOST=root@<server>; WP=/home/<domain>/public_html
-ssh -i $KEY -o IdentitiesOnly=yes $HOST "mkdir -p /root/clone-<slug>"
-scp -i $KEY -o IdentitiesOnly=yes -r scripts docs/research/<slug>/elementor public/sites/<slug> $HOST:/root/clone-<slug>/
+KEY=~/.ssh/<key-the-user-named>; HOST=root@<server>; WP=<WordPress root: find it with `ls /var/www /home`, never guess>
+ssh -i $KEY -o IdentitiesOnly=yes $HOST "mkdir -p /root/clone-<slug>/assets"
+scp -i $KEY -o IdentitiesOnly=yes -r scripts docs/research/<slug>/elementor $HOST:/root/clone-<slug>/
+scp -i $KEY -o IdentitiesOnly=yes -r public/sites/<slug> $HOST:/root/clone-<slug>/assets/   # JSON refers to {"asset": "<slug>/…"}
 ssh -i $KEY -o IdentitiesOnly=yes $HOST "cd /root/clone-<slug> && wp --path=$WP --allow-root db export /root/clone-<slug>/before.sql && \
-  wp --path=$WP --allow-root eval-file scripts/elementor-import.php <slug> elementor/<page>.json --user=<admin>"
+  wp --path=$WP --allow-root --exec=\"define('FS_METHOD','direct');\" eval-file scripts/elementor-import.php assets elementor/<page>.json --user=<admin>"
 ```
 
 - `--allow-root` is needed when the SSH user is root.
@@ -35,7 +36,8 @@ ssh -i $KEY -o IdentitiesOnly=yes $HOST "cd /root/clone-<slug> && wp --path=$WP 
   - Find it: `wp --skip-plugins eval 'echo 1;'` prints `1`; then skip plugins one at a time.
   - A common cause is the CLI's PHP lacking an extension that the web PHP has, for example `curl` with the Facebook Pixel plugins (`php -m` lists the extensions).
   - Fix: add `--skip-plugins=<those>` to every command. Never trust an empty result: it is a failure, not "no data".
-- If the site uses a page cache (LiteSpeed, WP Rocket), purge it after importing: `wp litespeed-purge all` or the plugin's own command.
+- **A fatal `ftp_nlist()` error while saving or deleting a post as root.** The files belong to the web user (`nobody`, `www-data`), so WordPress picks the FTP filesystem, and a plugin hooked to the save (Rank Math's sitemap cache through LiteSpeed) crashes on it. Add `--exec="define('FS_METHOD','direct');"` to commands that save posts, menus or media.
+- **Page caches.** Drafts aren't cached, so a draft clone needs no purge. Saving menus or clearing Elementor's CSS can make LiteSpeed or WP Rocket purge the whole site ("Dọn dẹp tất cả các bộ nhớ cache" / "Purged all caches" in the output). The importer avoids both unless the kit changes. If a purge does happen on a live store, mention it in the report.
 
 ### A disposable local site for testing
 

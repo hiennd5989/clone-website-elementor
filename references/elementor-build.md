@@ -22,14 +22,16 @@ wp eval-file scripts/elementor-import.php <assets-dir> kit.json <page>.json --us
 `--user` is required. Without a user, Elementor strips unfiltered HTML and refuses some saves. The importer does the following:
 
 - **Media.** Uploads local assets once each. They are tracked by `_clone_source` meta, so re-running does not duplicate them.
-- **Menus.** Creates and refreshes the menus that it created itself, and refuses to touch any other menu.
+- **Menus.** Creates and refreshes the menus that it created itself, and refuses to touch any other menu. A menu is rebuilt only when its items changed, because every menu-item save can make a caching plugin (LiteSpeed, WP Rocket) purge the whole site.
+- **Labels.** WordPress's `wptexturize` turns `'` and `"` in menu titles into curly quotes. Write them as `&#039;` / `&quot;` to keep the source's straight quotes.
 - **Placeholders.** Resolves these before saving:
   - `{{file:clone.css}}` becomes the file's contents.
   - `{{asset:img/x.jpg}}` becomes the uploaded URL.
   - `{{menu:key}}` becomes the menu ID.
   - `{"asset":"img/x.jpg","alt":"…"}` becomes an Elementor media value.
 - **Element IDs.** Gives elements stable IDs, so a re-import updates the page in place.
-- **Saving.** Saves through Elementor's Document API, which writes `_elementor_data`, regenerates the CSS file and sets edit mode.
+- **Saving.** Saves through Elementor's Document API, which writes `_elementor_data` and sets edit mode.
+- **CSS.** Regenerates only the imported pages' CSS. It clears all Elementor CSS only when the file changed the kit or options, since a full clear also purges the site's page cache.
 
 ## Page JSON shape
 
@@ -42,7 +44,7 @@ wp eval-file scripts/elementor-import.php <assets-dir> kit.json <page>.json --us
 }
 ```
 
-- **`key`** is a stable name that the importer hashes into the element ID. Keys must be unique on the page.
+- **IDs.** Elements without an `id` get one derived from the file name and the element's position, so a re-import updates the page in place. Inserting an element changes the IDs after it; that is harmless before the user starts editing, and afterwards give elements explicit `id`s.
 - **`status`** stays `draft` (or `private`) until the user approves publishing.
 - **`template`**:
   - `elementor_canvas` gives a blank page with no theme header or footer.
@@ -62,7 +64,9 @@ wp eval-file scripts/elementor-import.php <assets-dir> kit.json <page>.json --us
 | Link | `{"url":"/path","is_external":"","nofollow":""}` |
 | Colour | `"#282828"` or a global: put `"__globals__":{"title_color":"globals/colors?id=ms_text"}` in settings |
 
-Responsive values are separate keys with a suffix: `padding_tablet`, `padding_mobile_extra`, `padding_mobile`, and so on. A suffix only produces CSS when that breakpoint is active in the kit.
+Responsive values are separate keys with a suffix: `padding_tablet`, `padding_mobile_extra`, `padding_mobile`, and so on. A suffix only produces CSS when that breakpoint is active in the kit, so a `_mobile_extra` value on a site without that breakpoint is silently ignored: check the inventory's `breakpoints` first.
+
+**Responsive defaults apply even when you write nothing.** A grid container's `grid_columns_grid_mobile` defaults to **1**: a 3-column grid collapses into one column on phones unless you write `grid_columns_grid_mobile` too. The controls dump shows each variant's `default`; read the `_tablet` and `_mobile` defaults of every control you set.
 
 ## Breakpoints
 
@@ -81,7 +85,7 @@ Changing breakpoints changes **every** Elementor page on the site. On a site tha
 
 - Set `content_width` to `full` or `boxed`, and `container_type` to `flex` or `grid`.
 - Set `flex_direction` (`row`, `column`), `flex_wrap`, `justify_content` and `align_items`.
-- Grid layouts use `grid_columns_grid` / `grid_rows_grid`, which take `{"unit":"custom","size":"repeat(3, minmax(0,1fr))"}`.
+- Grid layouts use `grid_columns_grid` / `grid_rows_grid`, which take `{"unit":"custom","size":"repeat(3, minmax(0,1fr))"}`. Set the `_mobile` variant as well (see above). There is no control for a grid's `align-content`: a grid with a `min_height` packs its rows at the top unless `clone.css` sets `align-content: center`.
 - A container becomes a link with `"html_tag":"a"` plus a `link` value.
 - Backgrounds use:
   - `background_background: "classic"`
@@ -133,6 +137,10 @@ On Pro, `custom_css` in the page settings is cleaner for CSS. Behaviour JS still
 - **Prefix every rule** with a page class, such as `body.page-id-<id>` or a root container class like `.ms-page`, so nothing leaks into the rest of the site.
 - **Reset the theme's styles inside the clone.** Hello Elementor and most themes style `a` with a colour, `button`/`input` with borders and padding, and heading margins.
 - **Specificity.** Elementor's own selectors look like `.elementor-<postId> .elementor-element.elementor-element-<id>`. Beat them with your class chain plus `.elementor-element` rather than with `!important`.
+- **Theme `!important` rules beat Elementor controls.** For example, Elessi's `style-font-weight-500.css` sets `font-weight: 500 !important` on `.elementor-heading-title`, `strong` and `button`, so every heading's weight control silently does nothing. Only the numeric comparison of step 4 reveals it. Override in `clone.css` with `!important` under the page scope, and tell the user which controls the theme disables.
+- **Use `inherit`, not fixed values, in resets** (`text-transform: inherit`, `font-weight: inherit`). A reset like `p { text-transform: none }` cancels the transform that the widget's typography control sets on its wrapper.
+- **The site's floating extras.** `wp_footer` still runs on Elementor Canvas, so chat buttons, a mobile bottom bar, and "recently viewed" tabs from the theme or plugins appear on the clone. Hide them only on this page: `body:has(.ms-page) > :is(#chat-button, .theme-bottom-bar) { display: none !important; }`.
+- **Source breakpoints that the site lacks.** Put them in `clone.css` as `@media` rules. An `!important` rule there also overrides the Elementor `_mobile` value below it, so bound such rules to their range: `@media (min-width: 769px) and (max-width: 920px)`, not just `(max-width: 920px)`.
 - **Full-bleed on `elementor_canvas`:** `.elementor > .e-con { width: 100%; max-width: none; }`.
 - **Horizontal tracks:** use `overflow-x: auto; scroll-snap-type: x mandatory;` on the row container, with arrows from `clone.js` scrolling it by one card width.
 
@@ -154,6 +162,6 @@ All of these affect the whole site. On a live site, ask first and take `wp db ex
 
 - **Style-tab controls are missing outside the editor.** `get_controls()` omits them unless `\Elementor\Core\Frontend\Performance::set_use_style_controls(true)` is called first. Both scripts do this.
 - **`Document::save()` doesn't set edit mode.** It does not mark the page as built with Elementor, so the front end shows only `post_content`. Call `$document->set_is_built_with_elementor(true)` before saving (the importer does).
-- **CSS is cached.** After an import, run `\Elementor\Plugin::$instance->files_manager->clear_cache()` (the importer does), then purge any page cache such as LiteSpeed or WP Rocket.
+- **CSS is cached.** The importer regenerates the imported pages' CSS. After a kit change, it clears all Elementor CSS, and the page cache (LiteSpeed, WP Rocket) must be purged too. On a live store, don't purge the whole cache to look at a draft: drafts are not cached.
 - **Lazy-loaded backgrounds on the first viewport.** Elementor lazy-loads top-level container backgrounds. For a hero that must paint at once, disable lazy load in Elementor → Settings → Performance, or set the image in `clone.css`.
 - **Always compare logged out.** Logged in, the admin bar shifts sticky headers by 32px.
