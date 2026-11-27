@@ -9,6 +9,8 @@ Recreate the supplied pages as **Elementor pages on the user's WordPress site**,
 
 Hard rules:
 
+- **A clone needs a source, and copies it.** Start only from source URLs the user gave. Without one, stop and ask for it. Never design a page, invent a layout, write copy, or substitute the destination site's own content: every section, text, image, color, and measurement comes from the source and the extraction files of step 2. A "test page" or "sample in our brand" is not this skill; say so and ask.
+- **Done means compared.** Don't report a page as finished until the comparison of step 4 exists: source and result screenshots at the same widths, section by section, with each difference listed. A page nobody compared is a draft, and must be reported as one.
 - **Don't create or edit a theme.** Work with the active theme as installed. Theme files are overwritten by updates, so no PHP is added there. Adjust only the theme's own settings (Customizer, theme options) when that is the cleanest way to neutralize something, and record each change.
 - **Native widgets first.** Text, images, buttons, links, and layout go into Elementor widgets and containers so they are editable in the editor. Use an HTML widget only for behavior no available widget provides: a custom carousel control, a drawer, a form without a backend. Keep the editable content outside it whenever possible.
 - **Free unless Pro is present.** Detect Elementor Pro and other add-ons. Use a Pro feature only when it is active. Never install, activate, or license plugins without the user's approval.
@@ -51,6 +53,14 @@ Inspect the whole page at desktop and mobile widths. Scroll top to bottom to loa
 
 Treat each observation as one sample of a **rule**. Read declared values (computed styles, CSS variables, a library's live options) rather than inferring them from one rendering. Vary viewport width (including wider than the design), viewport height, input, and state until you know what drives each change. Fluid sizes usually come from `clamp()`/`vw` formulas: measure at three or more widths and derive the formula. List every **breakpoint** the source uses; they decide the Elementor breakpoint setup. Drive the page with the inputs visitors use (wheel, touch, keyboard, pointer).
 
+**Extract, don't eyeball.** At 1440 and 390 px wide, scroll the source page to the bottom so lazy content loads, then run `scripts/extract-source.js` in the page with the browser's script tool. Save each result as `docs/research/<site-slug>/extract-<width>.json`. It returns:
+
+- the stylesheet breakpoints, with how often each is used;
+- the section stack, top to bottom;
+- for each section: its box, its layout (flex/grid, columns, gaps, padding, background), its direct children's boxes, every text with its typography, every image and background image, and every link.
+
+Build from these files. Every section in the build plan names the extract section it reproduces, and every text and image in the page JSON exists in an extract file. Take a full-page screenshot at both widths too, and one per section when the page is long.
+
 Save source screenshots labeled with viewport, scroll position, and interaction state. Keep one compact page brief in `docs/research/<site-slug>/README.md`. It covers:
 
 - the route map and the site inventory;
@@ -92,6 +102,21 @@ Finish this pass when every requested page renders on the site with real assets,
 
 ## 4. Compare, repair, repeat
 
+**Getting the result on screen.** A draft or private page shows "not found" to a browser that is not logged in. Don't publish it to look at it. Render it on the server instead:
+
+```
+wp eval-file scripts/render-page.php <page-id> --user=<admin> > page.html
+```
+
+The rendered page has no admin bar, and its CSS, fonts and images load from the site by absolute URL. Open `page.html` in the browser (`file://…`), scroll so lazy images load, and screenshot it at the same widths as the source. Re-render after every import.
+
+**The comparison table** goes into the page brief and the final report. It has one row per extract section, at 1440 and at 390. Each row gives:
+
+- the source screenshot and the result screenshot;
+- a verdict: match, or the list of differences (position, size, font, color, spacing, missing or extra content).
+
+Run `scripts/extract-source.js` on the rendered result as well, and diff its section boxes, font sizes and colors against the source extract. Numbers catch what eyes miss.
+
 Compare **logged out**: the admin bar shifts sticky elements and Elementor adds editor-only markup when logged in. Open source and site pages at the **same viewport, scroll position, and state**. Let fonts, media, and reveal animations settle. Review the whole page wherever step 2 found a rule changing, plus a viewport wider than the design. Judge scroll and pointer behavior with real input. A side-by-side montage locates drift; full-size sections establish detail.
 
 Fix the largest visible differences first: geometry, missing sections or layers, typography and wrapping, asset crop, then spacing and motion. Elementor-specific drift to check:
@@ -117,7 +142,7 @@ Return:
 - Every site-wide change made (kit, breakpoints, settings, Customizer, menus), with how to revert it.
 - The route map.
 - What is editable in the editor, and what lives in `clone.css` / `clone.js`.
-- Desktop and mobile comparisons.
+- The comparison table of step 4 (desktop and mobile), with each remaining difference.
 - Checks actually run, and remaining gaps.
 
 Remind the user that a third-party site's branding, imagery, and copy belong to its owner: replace them before any public deployment.

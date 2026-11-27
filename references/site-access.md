@@ -31,6 +31,10 @@ ssh -i $KEY -o IdentitiesOnly=yes $HOST "cd /root/clone-<slug> && wp --path=$WP 
 - `--allow-root` is needed when the SSH user is root.
 - Afterwards, `chown` the uploads to the web user (`stat -c %U $WP/wp-content/uploads`) so WordPress can still manage those files.
 - Use only the SSH key the user names. Don't try keys one by one.
+- **`wp` prints nothing and exits 0.** Some plugin is hitting a fatal error during load, and the site hides PHP errors.
+  - Find it: `wp --skip-plugins eval 'echo 1;'` prints `1`; then skip plugins one at a time.
+  - A common cause is the CLI's PHP lacking an extension that the web PHP has, for example `curl` with the Facebook Pixel plugins (`php -m` lists the extensions).
+  - Fix: add `--skip-plugins=<those>` to every command. Never trust an empty result: it is a failure, not "no data".
 - If the site uses a page cache (LiteSpeed, WP Rocket), purge it after importing: `wp litespeed-purge all` or the plugin's own command.
 
 ### A disposable local site for testing
