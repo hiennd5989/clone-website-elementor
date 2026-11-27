@@ -57,9 +57,17 @@ Treat each observation as one sample of a **rule**. Read declared values (comput
 
 - the stylesheet breakpoints, with how often each is used;
 - the section stack, top to bottom;
-- for each section: a `key` that stays the same across widths, its box, its layout (flex/grid, columns, gaps, padding, background), its children's boxes (skipping single-child wrappers), every text with its glyph box and typography, every image and background image, and every link.
+- for each section: a `key` that stays the same across widths, its box, its layout (flex/grid, columns, gaps, padding, background), its children's boxes (skipping single-child wrappers), every text with its glyph box, typography and effective opacity, every image and background image, and every link;
+- `controls`: every visible link, button and field, with its fill, colour, border, radius, effective opacity, and transition time;
+- `floating`: the fixed layer on screen (chat bubbles, signup teasers pinned to an edge, cookie bars, back-to-top);
+- `thirdParty`: widget scripts on the page (chat, signup popups, reviews, consent), **even when their UI did not render**;
+- `stateRules` and `keyframes`: every `:hover`, `:focus-visible`, open and expanded rule that matches something on the page, with the keyframes those rules run.
 
-Build from these files. Every section in the build plan names the extract section it reproduces, and every text and image in the page JSON exists in an extract file. Take a full-page screenshot at both widths too, and one per section when the page is long.
+Build from these files. **`stateRules` is the interaction inventory:** every group in it (link underlines, icon fades, dropdown entrances, arrow nudges, card zooms) is built or listed as left out, with its duration and easing. A page that matches at rest but has no hover is not done.
+
+**Third-party widgets often don't render for an automated browser:** they check `navigator.webdriver`. Don't spoof it. When `thirdParty` lists a chat or signup script you can't see, ask the user for a screenshot of it, or open it some other way the page allows (a teaser click) and measure it. Leave a widget out only with the user's agreement.
+
+**Capture with the user's motion setting, and with the other one.** Run the extract once with the browser default and once with `prefers-reduced-motion` emulated the other way. Sources often skip their reveal animations under `reduce` but keep their hover transitions, and Elementor does the opposite (see step 4). Every section in the build plan names the extract section it reproduces, and every text and image in the page JSON exists in an extract file. Take a full-page screenshot at both widths too, and one per section when the page is long.
 
 Save source screenshots labeled with viewport, scroll position, and interaction state. Keep one compact page brief in `docs/research/<site-slug>/README.md`. It covers:
 
@@ -124,10 +132,16 @@ node scripts/compare-extracts.mjs docs/research/<slug>/extract-1440.json docs/re
 It lists, against the source:
 
 - section tops and heights;
-- every text whose glyph box, font, weight, line height, color or transform differs;
-- texts missing from the result or added to it.
+- every text whose glyph box, font, weight, line height, color, opacity or transform differs;
+- texts missing from the result or added to it;
+- controls whose fill, colour, border, radius, opacity or transition time differs, and controls missing or added (off-screen ones are flagged: usually a theme's off-canvas panel that is still focusable);
+- the floating layer, and the source's third-party widgets.
 
-Fix, re-import, re-render, and re-run it until only differences you can explain remain. Numbers catch what eyes miss: a theme rule forcing every heading to weight 500, a grid that went to one column on mobile, a 3px card padding. Put each width's report in the page brief.
+Fix, re-import, re-render, and re-run it until only differences you can explain remain. Numbers catch what eyes miss: a theme rule forcing every heading to weight 500, a theme painting every `<button>` black, transitions zeroed by a reduced-motion rule, a footer list dimmed to 0.7, a grid that went to one column on mobile, a 3px card padding. Put each width's report in the page brief.
+
+- **An added text or control is a bug, not a note.** Remove it, unless it is a disclosed stand-in (a "not sent" message). "Result texts not in the source" and "controls not in the source" should list only the stand-ins.
+- **Explained differences are structural, never visual**: a section split differently, a link wrapping a card instead of its title. Write the reason next to each in the brief.
+- **Elementor zeroes transitions under reduced motion.** Its `frontend.min.css` has `@media (prefers-reduced-motion: reduce) { html * { transition-duration: 0s !important } }`. On a PC with Windows animation effects off, every hover of the clone snaps while the source still animates. Compare with reduced motion on: a control whose transition time dropped to 0 shows it. See the build reference for the fix.
 
 - **Measure the source and the result in the same browser tab with the same emulation**, one after the other. Tabs that ever emulated a phone use overlay scrollbars, others don't, and a 15px scrollbar shifts every width.
 - **Re-extract the source in the same session as the result.** Live sites change: here a language selector appeared in the footer between two captures. When the source changed, the clone follows the current source.

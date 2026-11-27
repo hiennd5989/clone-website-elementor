@@ -12,6 +12,10 @@ Use `currentSrc` at enough resolution for the largest rendered size, and the obs
 
 Check each font's actual weight and style before declaring `@font-face`. SVGs uploaded to the Media Library need an SVG-upload capability. Elementor has an "Inline font icons / SVG" upload option; enabling it is a site-wide setting, so ask first. Otherwise inline the SVG in an HTML widget, or use the Icon widget with a matching icon set and disclose the substitution.
 
+## Hover and open states
+
+`extract-source.js` returns `stateRules` (every `:hover` / `:focus-visible` / open / expanded rule that matches something visible) and the `keyframes` they run. Read it before building. It names effects no screenshot shows: an underline that runs out and back in (two keyframes), icons fading to 0.7, a chevron turning while it lifts 10%, an arrow nudging 8px inside a clipped button, a dropdown rising 20px while its items stagger in 50ms apart. Then hover each one in the browser and sample it over time (computed `opacity`/`transform` every ~100ms) to confirm the timing. Note also what does **not** happen: a dropdown that closes instantly, with no delay, is part of the feel.
+
 ## Motion inspection
 
 | Driver | Evidence | Elementor implementation (prefer top to bottom) |
@@ -34,7 +38,7 @@ Observe both directions and mobile. Match measurable easing and duration. Page-w
 - Run on `DOMContentLoaded`, and stay safe when run twice: the editor preview re-renders widgets. Elementor fires `elementor/frontend/init`; in the editor (`body.elementor-editor-active`), skip behaviors that would fight editing, such as body scroll locks.
 - Keep state in attributes (`aria-expanded`, `aria-hidden`, `inert`, `data-state`) so CSS can style it.
 - Clean up listeners, observers, and timers when an element is removed. Lock and unlock body scroll symmetrically.
-- Respect `prefers-reduced-motion` only where the source does. Never let reduced motion hide content.
+- Respect `prefers-reduced-motion` only where the source does: check the source with the setting emulated both ways. Elementor's own CSS zeroes every transition under `reduce` (see the build reference), so a clone that "respects" it by accident snaps where the source animates. Never let reduced motion hide content.
 
 ## Verify the experience
 
